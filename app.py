@@ -3,7 +3,7 @@ import requests
 import json
 
 # --- 1. AYARLAR ---
-API_KEY = "AIzaSyCi85NJl7tyqKKC7-4JxRvKdi1XrEQwI_A".strip()
+API_KEY = "AIzaSyA97Onyv13VTD-mMYyMLkAML8WymEWnVMk".strip()
 URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
 
 # --- 2. PREMIUM KESTEL TASARIMI (CSS) ---
@@ -107,4 +107,5 @@ st.markdown(f"""
 <div class="developer-footer">
     👨‍💻 Geliştirici: <b>Yiğit Hamza Yılmaz</b>
 </div>
+
 """, unsafe_allow_html=True)
