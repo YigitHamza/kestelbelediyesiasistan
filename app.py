@@ -2,10 +2,9 @@ import streamlit as st
 import requests
 import json
 
-# --- 1. AYARLAR (GÜNCELLENMİŞ) ---
-# Paylaştığın Hugging Face Token'ı buraya entegre edildi
+# --- 1. AYARLAR ---
+# Sağladığınız bağımsız ve ücretsiz API altyapısı
 HF_TOKEN = "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"
-# Mistral-7B: Açık kaynaklı ve bağımsız bir modeldir.
 API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
 headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
@@ -30,13 +29,12 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 3. BİLGİ BANKASI ---
-# Orijinal dosyadaki bilgiler korunmuştur
 KESTEL_REHBERI = {
-    "eczane": "💊 **Nöbetçi Eczaneler:** Kestel'deki bugünkü nöbetçi eczane listesine ulaşmak için [BURAYA TIKLAYIN](https://www.aeo.org.tr/NobetciEczaneler). (Bursa Eczacı Odası Resmi Sayfası)",
-    "telefoncu": "📱 **Kestel Murat Telekom:** Türkcell, Vodafone ve Türk Telekom bayi işlemleri, fatura ödeme ve her türlü telefon aksesuarı için Kestel merkezdeki en güvenilir noktadır.",
-    "metro_ulasim": "🚌 **Kestel Metro Çıkışı:** 2-K ve D-11 hatları istasyondan kalkar. Hem **Kestel Merkez** hem de **Belediye**'ye gider. (D-11: Toplukonut / 2-K: TOKİ)",
-    "1k_ulasim": "🚌 **1-K Hattı:** Metroya girmez! Gürsu/Arabayatağı yönünden gelip Meydan ve Belediye'ye gider.",
-    "pazar": "📅 **Cuma Pazarı:** Kestel Kapalı Pazar Alanı'nda kurulmaktadır.",
+    "eczane": "Nöbetçi Eczaneler: Kestel'deki bugünkü nöbetçi eczane listesi için Bursa Eczacı Odası (aeo.org.tr) sayfasını kontrol ediniz.",
+    "telefoncu": "Kestel Murat Telekom: Türkcell, Vodafone ve Türk Telekom bayi işlemleri, fatura ödeme ve her türlü telefon aksesuarı için Kestel merkezdeki en güvenilir noktadır.",
+    "metro_ulasim": "Kestel Metro Çıkışı: 2-K ve D-11 hatları istasyondan kalkar. D-11 Toplukonut, 2-K ise TOKİ yönüne gider ve her ikisi de belediyeye ulaşır.",
+    "1k_ulasim": "1-K Hattı: Metroya girmez! Gürsu/Arabayatağı yönünden gelip Meydan ve Belediye'ye gider.",
+    "pazar": "Cuma Pazarı: Kestel Kapalı Pazar Alanı'nda kurulmaktadır.",
     "belediye_tel": "0224 372 10 01"
 }
 
@@ -61,7 +59,7 @@ with col2:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 5. SOHBET MOTORU ---
+# --- 5. SOHBET MOTORU (HİBRİT YAPI) ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -81,34 +79,36 @@ if user_input:
 
     with st.chat_message("assistant"):
         soru = user_input.lower()
-        cevap = ""
+        
+        # 1. Bilgi Bankasından Veri Çekme
+        ek_bilgi = ""
+        if "eczane" in soru or "nöbetçi" in soru: ek_bilgi = KESTEL_REHBERI["eczane"]
+        elif any(x in soru for x in ["telefoncu", "turkcell", "vodafone", "telekom", "murat"]): ek_bilgi = KESTEL_REHBERI["telefoncu"]
+        elif any(x in soru for x in ["metro", "2-k", "d11"]): ek_bilgi = KESTEL_REHBERI["metro_ulasim"]
+        elif "1-k" in soru or "1k" in soru: ek_bilgi = KESTEL_REHBERI["1k_ulasim"]
+        elif "pazar" in soru: ek_bilgi = KESTEL_REHBERI["pazar"]
+        elif "meşhur" in soru or "çilek" in soru: ek_bilgi = "Kestel'in tescilli sanayi çileği ve deveci armudu meşhurdur."
 
-        # Yerel Hafıza Kontrolü
-        if "eczane" in soru or "nöbetçi" in soru: cevap = KESTEL_REHBERI["eczane"]
-        elif any(x in soru for x in ["telefoncu", "turkcell", "vodafone", "telekom", "murat"]): cevap = KESTEL_REHBERI["telefoncu"]
-        elif any(x in soru for x in ["metro", "2-k", "d11"]): cevap = KESTEL_REHBERI["metro_ulasim"]
-        elif "1-k" in soru or "1k" in soru: cevap = KESTEL_REHBERI["1k_ulasim"]
-        elif "pazar" in soru: cevap = KESTEL_REHBERI["pazar"]
-        elif "meşhur" in soru or "çilek" in soru: cevap = "🍓 Kestel'in tescilli **sanayi çileği** ve **deveci armudu** meşhurdur!"
-
-        # API Sorgusu (Yeni Bağımsız Altyapı)
-        if not cevap:
-            try:
-                # Mistral formatına uygun prompt
-                prompt = f"<s>[INST] Sen Kestel Belediyesi asistanısın. Kısa, resmi olmayan ama nazik bir dille sadece Türkçe cevap ver. Soru: {user_input} [/INST]"
-                payload = {
-                    "inputs": prompt,
-                    "parameters": {"max_new_tokens": 500, "temperature": 0.7, "return_full_text": False}
-                }
-                
-                res = requests.post(API_URL, headers=headers, json=payload, timeout=10)
-                
-                if res.status_code == 200:
-                    cevap = res.json()[0]['generated_text'].strip()
-                else:
-                    cevap = f"Şu an belediye sistemlerinde bir güncelleme var. Detaylı bilgi için **{KESTEL_REHBERI['belediye_tel']}** numarasını arayabilirsiniz."
-            except:
-                cevap = f"Bağlantı hatası. Lütfen **{KESTEL_REHBERI['belediye_tel']}** hattımızı kullanın."
+        # 2. Yapay Zeka Sorgusu (Bilgiyi Harmanla)
+        try:
+            # Talimat ve Bilgi girişi
+            context_text = f"Belediye kayıtlarındaki bilgi şudur: {ek_bilgi}" if ek_bilgi else "Özel bir kayıt bulunamadı."
+            prompt = f"<s>[INST] Sen Kestel Belediyesi dijital asistanısın. {context_text} Bu bilgiyi kullanarak (eğer bilgi yoksa genel bilginle) şu soruya Türkçe, nazik ve kısa bir yanıt üret: {user_input} [/INST]"
+            
+            payload = {
+                "inputs": prompt,
+                "parameters": {"max_new_tokens": 400, "temperature": 0.7, "return_full_text": False}
+            }
+            
+            res = requests.post(API_URL, headers=headers, json=payload, timeout=12)
+            
+            if res.status_code == 200:
+                cevap = res.json()[0]['generated_text'].strip()
+            else:
+                # API başarısızsa veritabanındaki ham bilgiyi kurtarıcı olarak kullan
+                cevap = ek_bilgi if ek_bilgi else f"Üzgünüm, şu an bağlantı kuramıyorum. Lütfen {KESTEL_REHBERI['belediye_tel']} numaralı hattımızı arayın."
+        except:
+            cevap = ek_bilgi if ek_bilgi else "Bağlantı hatası yaşandı."
 
         st.markdown(cevap)
         st.session_state.messages.append({"role": "assistant", "content": cevap})
