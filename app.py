@@ -2,9 +2,12 @@ import streamlit as st
 import requests
 import json
 
-# --- 1. AYARLAR ---
-API_KEY = "AIzaSyA97Onyv13VTD-mMYyMLkAML8WymEWnVMk".strip()
-URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+# --- 1. AYARLAR (GÜNCELLENMİŞ) ---
+# Paylaştığın Hugging Face Token'ı buraya entegre edildi
+HF_TOKEN = "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"
+# Mistral-7B: Açık kaynaklı ve bağımsız bir modeldir.
+API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
+headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
 # --- 2. PREMIUM KESTEL TASARIMI (CSS) ---
 st.set_page_config(page_title="Kestel Belediyesi Asistanı", page_icon="🏢", layout="centered")
@@ -27,6 +30,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 3. BİLGİ BANKASI ---
+# Orijinal dosyadaki bilgiler korunmuştur
 KESTEL_REHBERI = {
     "eczane": "💊 **Nöbetçi Eczaneler:** Kestel'deki bugünkü nöbetçi eczane listesine ulaşmak için [BURAYA TIKLAYIN](https://www.aeo.org.tr/NobetciEczaneler). (Bursa Eczacı Odası Resmi Sayfası)",
     "telefoncu": "📱 **Kestel Murat Telekom:** Türkcell, Vodafone ve Türk Telekom bayi işlemleri, fatura ödeme ve her türlü telefon aksesuarı için Kestel merkezdeki en güvenilir noktadır.",
@@ -79,7 +83,7 @@ if user_input:
         soru = user_input.lower()
         cevap = ""
 
-        # Yerel Hafıza
+        # Yerel Hafıza Kontrolü
         if "eczane" in soru or "nöbetçi" in soru: cevap = KESTEL_REHBERI["eczane"]
         elif any(x in soru for x in ["telefoncu", "turkcell", "vodafone", "telekom", "murat"]): cevap = KESTEL_REHBERI["telefoncu"]
         elif any(x in soru for x in ["metro", "2-k", "d11"]): cevap = KESTEL_REHBERI["metro_ulasim"]
@@ -87,17 +91,24 @@ if user_input:
         elif "pazar" in soru: cevap = KESTEL_REHBERI["pazar"]
         elif "meşhur" in soru or "çilek" in soru: cevap = "🍓 Kestel'in tescilli **sanayi çileği** ve **deveci armudu** meşhurdur!"
 
-        # API Sorgusu
+        # API Sorgusu (Yeni Bağımsız Altyapı)
         if not cevap:
             try:
-                payload = {"contents": [{"parts": [{"text": f"Kestel Belediyesi asistanısın. Soru: {user_input}"}]}]}
-                res = requests.post(URL, json=payload, timeout=5)
+                # Mistral formatına uygun prompt
+                prompt = f"<s>[INST] Sen Kestel Belediyesi asistanısın. Kısa, resmi olmayan ama nazik bir dille sadece Türkçe cevap ver. Soru: {user_input} [/INST]"
+                payload = {
+                    "inputs": prompt,
+                    "parameters": {"max_new_tokens": 500, "temperature": 0.7, "return_full_text": False}
+                }
+                
+                res = requests.post(API_URL, headers=headers, json=payload, timeout=10)
+                
                 if res.status_code == 200:
-                    cevap = res.json()['candidates'][0]['content']['parts'][0]['text']
+                    cevap = res.json()[0]['generated_text'].strip()
                 else:
-                    cevap = f"Üzgünüm, detaylı bilgi için **{KESTEL_REHBERI['belediye_tel']}** numarasından belediyemizi arayınız."
+                    cevap = f"Şu an belediye sistemlerinde bir güncelleme var. Detaylı bilgi için **{KESTEL_REHBERI['belediye_tel']}** numarasını arayabilirsiniz."
             except:
-                cevap = f"Bağlantı hatası. Lütfen **{KESTEL_REHBERI['belediye_tel']}** hattımızı arayınız."
+                cevap = f"Bağlantı hatası. Lütfen **{KESTEL_REHBERI['belediye_tel']}** hattımızı kullanın."
 
         st.markdown(cevap)
         st.session_state.messages.append({"role": "assistant", "content": cevap})
@@ -107,5 +118,4 @@ st.markdown(f"""
 <div class="developer-footer">
     👨‍💻 Geliştirici: <b>Yiğit Hamza Yılmaz</b>
 </div>
-
 """, unsafe_allow_html=True)
